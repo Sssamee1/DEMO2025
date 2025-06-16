@@ -1,54 +1,76 @@
 # если все можно http://xn---220-43dg5d.xn--p1ai/ru/demo-2025/modul-1/modul-1-1
-# Demo2025
+# DM25
 
+# Основное
 ## 1. Базовая настройка системы
-
 ### Изменение имени хоста
+
 ```bash
-hostnamectl hostname "имя_машины"
-exec bash
-# НЕ ЗАБУДЬТЕ ОТКЛЮЧИТЬ  firewall  командой systemctl disable firewalld --now  (если не отключить gre и ospf могут не работать) вроде на  hq-r
-
+hostnamectl hostname "имя_машины"; exec bash
 ```
-## 1/1 Настройка Айпишников 
-### АЙПИ МОГУТ БЫТЬ ДРУГИМИ
 
-### в таком случае айпишники будут такие 
-## ISP:
-```
+#### НЕ ЗАБУДЬТЕ ОТКЛЮЧИТЬ  firewall  командой systemctl disable firewalld --now
+#### (если не отключить gre и ospf могут не работать) на  машинах где tunnel и ospf
+
+### IP-адресса
+#### Пример (айпи могут измениться)
+```bash
+ISP:
 isp-hq - 172.16.4.1/28 gateway оставляем пустым
 isp-br - 172.16.5.1/28 gateway оставляем пустым
-```
-## HQ-R
-```
+
+HQ-R
 isp-hq - 172.16.4.2/28 gateway 172.16.4.1  (айпи машины isp)
-```
-## BR-R
-```
+
+BR-R
 isp-br - 172.16.5.2/28 gateway 172.16.5.1  (айпи машины isp)
 ```
 
-№№№ если задание поменяли и подсети стали например:
+## 2. Настройка маршрутизации
+### На ISP - включение IP forwarding
+```bash
+nano /etc/net/sysctl.conf
 ```
-isp-hq 172.16.10.0/28
-isp-br 172.16.11.0/28
 ```
-№№№ то айпишники получились бы такие
-## ISP:
+net.ipv4.ip_forward = 1
+
 ```
-isp-hq - 172.16.10.1/28 gateway оставляем пустым
-isp-br - 172.16.11.1/28 gateway оставляем пустым
+## после этого нужнно перезагрузить ISP
 ```
-## HQ-R
-```
-isp-hq - 172.16.10.2/28 gateway 172.16.10.1  (айпи машины isp)
-```
-## BR-R
-```
-isp-br - 172.16.11.2/28 gateway 172.16.11.1  (айпи машины isp)
+reboot
 ```
 
-## 2. Создание пользователя net_admin (HQ-RTR и BR-RTR)
+## 3. Настройка GRE туннелей
+### На BR-RTR (Branch Router)
+**Сетевые настройки:**
+- Profile name: tun1
+- Device: tun1
+- Mode: GRE
+- Parent: ens34
+- Local IP: 172.16.5.2
+- Remote IP: 172.16.4.2
+- IPv4 Configuration: Manual
+  - IP: 192.168.0.2/24
+  - Gateway: 192.168.0.1
+
+### На HQ-RTR (Headquarters Router)
+**Сетевые настройки:**
+- Profile name: tun1
+- Device: tun1
+- Mode: GRE
+- Parent: ens34
+- Local IP: 172.16.4.2
+- Remote IP: 172.16.5.2
+- IPv4 Configuration: Manual
+  - IP: 192.168.0.1/24
+  - Gateway: 192.168.0.2
+
+### Перезагрузить машины
+
+**Если GRE тунель не работает пропинговать с HQ-R BR-R по его айпи, если пинги не проходят то перезаагрузить машину ISP, также если это не помогло то можно попробовать временно отключить другие сетевые интерфейсы (hqin и brin) команда1 - ip -c a, команда2 - ping -c4 "ip другой машины"**
+
+
+## 4. Создание пользователя net_admin (HQ-RTR и BR-RTR)
 ```bash
 # Создание пользователя
 adduser net_admin
@@ -63,7 +85,7 @@ net_admin ALL=(ALL:ALL)NOPASSWD:ALL
 
 ```
 
-## 3. Создание пользователя sshuser (на HQ-SRV и BR-SRV)
+## 5. Создание пользователя sshuser (на HQ-SRV и BR-SRV)
 
 ```bash
 # Создание пользователя
@@ -79,7 +101,7 @@ sshuser ALL=(ALL:ALL)NOPASSWD:ALL
 
 ```
 
-## 4. Настройка SSH (на HQ-SRV и BR-SRV)
+## 6. Настройка SSH (на HQ-SRV и BR-SRV)
 
 ### Создание баннера
 ```bash
@@ -105,52 +127,8 @@ AllowUsers sshuser
 ### Перезапуск службы
 ```bash
 systemctl restart sshd.service
+после чего пингуем
 ```
-
-
-## 5. Настройка маршрутизации
-
-### На ISP - включение IP forwarding
-```bash
-nano /etc/net/sysctl.conf
-```
-```
-net.ipv4.ip_forward = 1
-
-```
-## после этого нужнно перезагрузить ISP
-```
-reboot
-```
-## 6. Настройка GRE туннелей
-### На BR-RTR (Branch Router)
-**Сетевые настройки:**
-- Profile name: tun1
-- Device: tun1
-- Mode: GRE
-- Parent: ens34
-- Local IP: 172.16.5.2
-- Remote IP: 172.16.4.2
-- IPv4 Configuration: Manual
-  - IP: 192.168.0.2/24
-  - Gateway: 192.168.0.1
-
-### На HQ-RTR (Headquarters Router)
-**Сетевые настройки:**
-- Profile name: tun1
-- Device: tun1
-- Mode: GRE
-- Parent: ens34
-- Local IP: 172.16.4.2
-- Remote IP: 172.16.5.2
-- IPv4 Configuration: Manual
-  - IP: 192.168.0.1/24
-  - Gateway: 192.168.0.2
-
-**Если GRE тунель не работает пропинговать с HQ-R BR-R по его айпи, если пинги не проходят то перезаагрузить машину ISP, также если это не помогло то можно попробовать временно отключить другие сетевые интерфейсы (hqin и brin)**
-
-
-
 
 ## 7. Настройка OSPF маршрутизации
 
@@ -300,7 +278,9 @@ df -h | grep /mnt/raid5
 > /dev/md0  2.0G  24K  1.9G  1%  /mnt/raid5
 > ```
 
-#### Настройка NFS SERVER на HQ-SRV
+
+# Дополниетльно
+## 1.Настройка NFS SERVER на HQ-SRV
 ```
 mkdir /mnt/raid5/nfs
 
@@ -314,7 +294,7 @@ exportfs -arv
 
 systemctl enable --now nfs-server
 ```
-#### Настройка NFS CLIENT (вроде на hq-cli смотрите по заданию кому надо монтировать)
+## 2.Настройка NFS CLIENT (вроде на hq-cli смотрите по заданию кому надо монтировать)
 ```
 mkdir /mnt/nfs
 
@@ -335,7 +315,7 @@ df -h | grep /mnt/nfs
 > 172.16.0.2:/mnt/raid5/nfs  2,0G  0  1,9G  0%  /mnt/nfs
 > ```
 
-### Настройка chrony на HQ srv
+## 3.Настройка chrony на HQ srv
 
 Правим файл командой  **`nano /etc/chrony.conf`** :
 ```yml
@@ -348,7 +328,6 @@ hwtimestamp *
 local stratum 5
 allow 0/0
 ```
-> ![image](https://github.com/user-attachments/assets/1a80b134-5e9e-4310-9a1a-1c1eca654200)
 
 Запускаем и добавляем в автозагрузку утилиту **chronyd**:
 ```yml
@@ -373,13 +352,21 @@ chronyc tracking | grep Stratum
 > Stratum: 5
 > ```
 
-## Примечания
-В задание есть тема установить яндекс браузер, ищите это легкие баллы 
-
-
-
-- 
-> Вывод:
-> ```yml
-> Stratum: 5
-> ```
+## 4.Яндекс браузер
+### Найти на какой машине загрушен установщик, там и устанавливаем браузер
+#### Вводим в терминале следующую команду
+```
+wget -q -O — https://repo.yandex.ru/yandex-browser/YANDEX-BROWSER-KEY.GPG | sudo apt-key add —
+```
+#### Добавляем репозиторий
+```
+sudo sh -c ‘echo «deb [arch=amd64] http://repo.yandex.ru/yandex-browser/deb beta main» > /etc/apt/sources.list.d/yandex-browser-beta.list’
+```
+#### Обновляем системные библиотеки
+```
+sudo apt update
+```
+#### Устанавливаем пакет
+```
+sudo apt install yandex-browser-beta
+```
